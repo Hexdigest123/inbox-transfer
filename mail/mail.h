@@ -1,10 +1,15 @@
 #ifndef MAIL_H
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 typedef struct Connection {
   char *host;
   char *ip;
   int port;
   int socketfd;
+  SSL *ssl;
+  int use_tls;
 } Connection;
 
 typedef struct Capability {
@@ -12,6 +17,11 @@ typedef struct Capability {
   char *name;
   char *value;
 } Capability;
+
+/**
+ * @brief initializes OpenSSL library (call once at program start)
+ */
+void initOpenSSL(void);
 
 /**
  * @brief establishes a connection to the mail server
@@ -39,7 +49,7 @@ void readStream(Connection *pConn, char **pData, int *nDataLen);
 void writeStream(Connection *pConn, char *data, int nDataLen);
 
 /**
- * @brief handles TLS/SSL requests from the server
+ * @brief handles TLS/SSL upgrade via STARTTLS command
  *
  * @param pConn pointer to connection object
  */

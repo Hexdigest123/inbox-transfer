@@ -1,7 +1,14 @@
+OPENSSL_INC = -I/opt/homebrew/opt/openssl@3/include
+OPENSSL_LIB = -L/opt/homebrew/opt/openssl@3/lib
+
+CFLAGS = $(OPENSSL_INC) -Wall -g
+LDFLAGS = $(OPENSSL_LIB) -lssl -lcrypto
+
 all:
-	gcc -g *.c mail/*.c -o main.exe
+	gcc $(CFLAGS) *.c mail/*.c -o main $(LDFLAGS)
+
 run:
-	./main.exe
+	./main
 
 clean:
-	rm *.exe *.dll *.o *.a
+	rm -f main *.o

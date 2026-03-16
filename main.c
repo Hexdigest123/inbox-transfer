@@ -4,6 +4,8 @@
 #include <string.h>
 
 int main(int argc, char **argv) {
+  initOpenSSL();
+
   if (argc < 3) {
     if (argc == 2) {
       if (strcmp(argv[1], "-h") == 0) {
@@ -23,6 +25,10 @@ int main(int argc, char **argv) {
   conn2.host = (char *)malloc(sizeof(char) * 256);
   conn1.ip = (char *)malloc(sizeof(char) * 32);
   conn2.ip = (char *)malloc(sizeof(char) * 32);
+  conn1.ssl = NULL;
+  conn2.ssl = NULL;
+  conn1.use_tls = 0;
+  conn2.use_tls = 0;
   if (!conn1.host || !conn2.host || !conn1.ip || !conn2.ip) {
     fprintf(stderr, "Memory allocation failed\n");
     return 1;
@@ -80,6 +86,18 @@ int main(int argc, char **argv) {
   for (int i = 0; i < capArrayLength; i++) {
     printf("%s - %s\n", capArray[i].name, capArray[i].value);
     if (strcmp(capArray[i].name, "STARTTLS") == 0) {
+      writeStream(&conn1, "STARTTLS\r\n", strlen("STARTTLS\r\n"));
+      char *response = NULL;
+      int responseLen;
+      readStream(&conn1, &response, &responseLen);
+      printf("%s", response);
+      if (strncmp(response, "220", 3) == 0) {
+        handleTLS(&conn1);
+        printf("Connection secured with TLS\n");
+      } else {
+        fprintf(stderr, "Failed to start TLS: %s\n", response);
+        return 1;
+      }
     }
   }
 

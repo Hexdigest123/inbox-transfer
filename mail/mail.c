@@ -1,6 +1,8 @@
 #include "mail.h"
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +10,9 @@
 #include <unistd.h>
 
 void createConnection(Connection *pConn) {
+  pConn->ssl = NULL;
+  pConn->use_tls = 0;
+
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd < 0) {
     fprintf(stderr, "%s:%d\n", pConn->host, pConn->port);
@@ -33,29 +38,18 @@ void createConnection(Connection *pConn) {
   printf("Connected to %s:%d\n", pConn->host, pConn->port);
 }
 
-/**
- * @brief reads SMTP response from the mail server (handles multi-line)
- *
- * Multi-line SMTP responses use format:
- *   250-first line    (hyphen = continuation)
- *   250-second line
- *   250 last line     (space = final line)
- *
- * The 4th character (index 3) indicates continuation:
- *   '-' = more lines coming
- *   ' ' = last line
- *
- * @param pConn pointer to connection object
- * @param pData pointer to data buffer
- * @param nDataLen pointer to length of the data buffer
- */
 void readStream(Connection *pConn, char **pData, int *nDataLen) {
   *pData = (char *)malloc(sizeof(char) * 1024);
   ssize_t totalBytesRead = 0;
   size_t capacity = 1024;
 
   while (1) {
-    ssize_t n = recv(pConn->socketfd, *pData + totalBytesRead, 1, 0);
+    ssize_t n;
+    if (pConn->use_tls && pConn->ssl) {
+      n = SSL_read(pConn->ssl, *pData + totalBytesRead, 1);
+    } else {
+      n = recv(pConn->socketfd, *pData + totalBytesRead, 1, 0);
+    }
     if (n <= 0) {
       break;
     }
@@ -93,8 +87,12 @@ void readStream(Connection *pConn, char **pData, int *nDataLen) {
 void writeStream(Connection *pConn, char *data, int nDataLen) {
   ssize_t totalBytesSent = 0;
   while (totalBytesSent < nDataLen) {
-    ssize_t n = send(pConn->socketfd, data + totalBytesSent,
-                     nDataLen - totalBytesSent, 0);
+    ssize_t n;
+    if (pConn->use_tls && pConn->ssl) {
+      n = SSL_write(pConn->ssl, data + totalBytesSent, nDataLen - totalBytesSent);
+    } else {
+      n = send(pConn->socketfd, data + totalBytesSent, nDataLen - totalBytesSent, 0);
+    }
     if (n < 0) {
       fprintf(stderr, "Failed to send data to %s:%d\n", pConn->host,
               pConn->port);
@@ -105,13 +103,52 @@ void writeStream(Connection *pConn, char *data, int nDataLen) {
   }
 }
 
-void handleTLS(Connection *pConn) {}
+void initOpenSSL(void) {
+  SSL_load_error_strings();
+  SSL_library_init();
+  OpenSSL_add_all_algorithms();
+}
+void handleTLS(Connection *pConn) {
+  // Create context
+  SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+  if (!ctx) {
+    ERR_print_errors_fp(stderr);
+    exit(EXIT_FAILURE);
+  }
+
+  // Use system CA bundle for verification
+  SSL_CTX_set_default_verify_paths(ctx);
+
+  // Create SSL object
+  pConn->ssl = SSL_new(ctx);
+  SSL_set_fd(pConn->ssl, pConn->socketfd);
+
+  // SNI - critical for virtual hosting
+  SSL_set_tlsext_host_name(pConn->ssl, pConn->host);
+
+  // Handshake
+  if (SSL_connect(pConn->ssl) != 1) {
+    ERR_print_errors_fp(stderr);
+    SSL_free(pConn->ssl);
+    SSL_CTX_free(ctx);
+    exit(EXIT_FAILURE);
+  }
+
+  pConn->use_tls = 1;
+  SSL_CTX_free(ctx); // SSL holds reference
+}
 
 void closeConnection(Connection *pConn) {
+  if (pConn->ssl) {
+    SSL_shutdown(pConn->ssl);
+    SSL_free(pConn->ssl);
+    pConn->ssl = NULL;
+  }
   close(pConn->socketfd);
   free(pConn->host);
   free(pConn->ip);
   pConn->socketfd = -1;
   pConn->host = NULL;
   pConn->ip = NULL;
+  pConn->use_tls = 0;
 }
