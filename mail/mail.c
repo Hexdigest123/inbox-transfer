@@ -64,21 +64,7 @@ void readStream(Connection *pConn, char **pData, int *nDataLen) {
 
     if (totalBytesRead >= 2 && (*pData)[totalBytesRead - 2] == '\r' &&
         (*pData)[totalBytesRead - 1] == '\n') {
-
-      int lineStart = 0;
-      for (int i = totalBytesRead - 3; i >= 0; i--) {
-        if (i >= 1 && (*pData)[i - 1] == '\r' && (*pData)[i] == '\n') {
-          lineStart = i + 1;
-          break;
-        }
-      }
-
-      if (totalBytesRead - lineStart >= 4) {
-        char separator = (*pData)[lineStart + 3];
-        if (separator == ' ') {
-          break;
-        }
-      }
+      break;
     }
   }
 
@@ -90,9 +76,11 @@ void writeStream(Connection *pConn, char *data, int nDataLen) {
   while (totalBytesSent < nDataLen) {
     ssize_t n;
     if (pConn->use_tls && pConn->ssl) {
-      n = SSL_write(pConn->ssl, data + totalBytesSent, nDataLen - totalBytesSent);
+      n = SSL_write(pConn->ssl, data + totalBytesSent,
+                    nDataLen - totalBytesSent);
     } else {
-      n = send(pConn->socketfd, data + totalBytesSent, nDataLen - totalBytesSent, 0);
+      n = send(pConn->socketfd, data + totalBytesSent,
+               nDataLen - totalBytesSent, 0);
     }
     if (n < 0) {
       fprintf(stderr, "Failed to send data to %s:%d\n", pConn->host,
@@ -110,9 +98,9 @@ void initOpenSSL(void) {
   OpenSSL_add_all_algorithms();
 }
 
-char* imapNextTag(Connection *pConn) {
+char *imapNextTag(Connection *pConn) {
   char *tag = (char *)malloc(sizeof(char) * 8);
-  snprintf(tag,8, "A%03d", ++pConn->tag_counter);
+  snprintf(tag, 8, "A%03d", ++pConn->tag_counter);
   return tag;
 }
 void handleTLS(Connection *pConn) {

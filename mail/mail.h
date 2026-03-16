@@ -1,7 +1,7 @@
 #ifndef MAIL_H
 
-#include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 
 typedef struct Connection {
   char *host;
@@ -25,7 +25,7 @@ void initOpenSSL(void);
 /**
  * @brief generates next IMAP command tag (A001, A002, etc.)
  */
-char* imapNextTag(Connection *pConn);
+char *imapNextTag(Connection *pConn);
 
 /**
  * @brief establishes a connection to the mail server

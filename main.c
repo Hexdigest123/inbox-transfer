@@ -38,58 +38,64 @@ int main(int argc, char **argv) {
   sscanf(argv[1], "%255[^:]:%d", conn1.host, &conn1.port);
   sscanf(argv[2], "%255[^:]:%d", conn2.host, &conn2.port);
 
-createConnection(&conn1);
-char *banner = NULL;
-int bannerLen;
-readStream(&conn1, &banner, &bannerLen);
-printf("%s", banner);
+  createConnection(&conn1);
+  char *banner = NULL;
+  int bannerLen;
+  readStream(&conn1, &banner, &bannerLen);
+  printf("%s", banner);
 
-if (strncmp(banner, "* OK", 4) != 0) {
-  fprintf(stderr, "Invalid IMAP greeting: %s\n", banner);
-  return 1;
-}
-
-char *tag = imapNextTag(&conn1);
-char cmd[256];
-snprintf(cmd, sizeof(cmd), "%s CAPABILITY\r\n", tag);
-writeStream(&conn1, cmd, strlen(cmd));
-free(tag);
-
-char *capString = NULL;
-int capStringLength;
-readStream(&conn1, &capString, &capStringLength);
-printf("%s", capString);
-
-int has_starttls = 0;
-char *line = strtok(capString, "\r\n");
-while (line != NULL) {
-  if (strstr(line, "STARTTLS") != NULL) {
-    has_starttls = 1;
-  }
-  line = strtok(NULL, "\r\n");
-}
-
-if (has_starttls) {
-  tag = imapNextTag(&conn1);
-  snprintf(cmd, sizeof(cmd), "%s STARTTLS\r\n", tag);
-  writeStream(&conn1, cmd, strlen(cmd));
-  free(tag);
-  
-  char *response = NULL;
-  int responseLen;
-  readStream(&conn1, &response, &responseLen);
-  printf("%s", response);
-  
-  if (strstr(response, "OK") != NULL) {
-    handleTLS(&conn1);
-    printf("Connection secured with TLS\n");
-  } else {
-    fprintf(stderr, "Failed to start TLS: %s\n", response);
+  if (strncmp(banner, "* OK", 4) != 0) {
+    fprintf(stderr, "Invalid IMAP greeting: %s\n", banner);
     return 1;
   }
-}
 
-closeConnection(&conn1);
+  char *tag = imapNextTag(&conn1);
+  char cmd[256];
+  snprintf(cmd, sizeof(cmd), "%s CAPABILITY\r\n", tag);
+  writeStream(&conn1, cmd, strlen(cmd));
+
+  int has_starttls = 0;
+
+  while (1) {
+    char *line = NULL;
+    int lineLen;
+    readStream(&conn1, &line, &lineLen);
+    printf("%s", line);
+
+    if (strncmp(line, tag, strlen(tag)) == 0) {
+      free(line);
+      break;
+    }
+
+    if (strstr(line, "STARTTLS") != NULL) {
+      has_starttls = 1;
+    }
+
+    free(line);
+  }
+  free(tag);
+
+  if (has_starttls) {
+    tag = imapNextTag(&conn1);
+    snprintf(cmd, sizeof(cmd), "%s STARTTLS\r\n", tag);
+    writeStream(&conn1, cmd, strlen(cmd));
+    free(tag);
+
+    char *response = NULL;
+    int responseLen;
+    readStream(&conn1, &response, &responseLen);
+    printf("%s", response);
+
+    if (strstr(response, "OK") != NULL) {
+      handleTLS(&conn1);
+      printf("Connection secured with TLS\n");
+    } else {
+      fprintf(stderr, "Failed to start TLS: %s\n", response);
+      return 1;
+    }
+  }
+
+  closeConnection(&conn1);
 
   return 0;
 }
