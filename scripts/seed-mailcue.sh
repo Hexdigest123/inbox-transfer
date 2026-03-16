@@ -42,20 +42,14 @@ login() {
 create_mailbox() {
     local address="$1"
     local password="$2"
+    local username="${address%%@*}"
     
     log_info "Creating mailbox: ${address}"
-    local result
-    result=$(curl -s -w "%{http_code}" -X POST "${BASE_URL}/api/v1/mailboxes" \
+    curl -s -X POST "${BASE_URL}/api/v1/mailboxes" \
         -H "Authorization: Bearer ${TOKEN}" \
         -H "Content-Type: application/json" \
-        -d "{\"address\":\"${address}\",\"password\":\"${password}\"}" 2>&1) || true
-    
-    local http_code="${result##*$'\n'}"   
-    if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
-        log_info "Mailbox ${address} created"
-    else
-        log_info "Mailbox ${address} already exists or created"
-    fi
+        -d "{\"username\":\"${username}\",\"password\":\"${password}\"}" > /dev/null 2>&1 || true
+    log_info "Mailbox ${address} ready"
 }
 
 bulk_inject() {

@@ -3,6 +3,8 @@
 *.so
 *.o
 *.a
+/out
+/main.exe.*
 
 # Environment files
 .env

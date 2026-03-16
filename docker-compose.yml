@@ -28,6 +28,9 @@ services:
       - MAILCUE_ADMIN_PASSWORD=mailcue
       # Leave empty to auto-generate at first boot
       - MAILCUE_SECRET_KEY=
+      # Rate limits (set high for local dev)
+      - MAILCUE_LOGIN_RATE_LIMIT=1000/minute
+      - MAILCUE_SENSITIVE_RATE_LIMIT=1000/minute
       # IMAP master user for API impersonation
       - MAILCUE_IMAP_MASTER_USER=mailcue-master
       - MAILCUE_IMAP_MASTER_PASSWORD=master-secret
