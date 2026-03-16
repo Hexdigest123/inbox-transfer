@@ -7,11 +7,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-/**
- * @brief establishes a connection to the mail server
- *
- * @param pConn pointer to connection object
- */
 void createConnection(Connection *pConn) {
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd < 0) {
@@ -37,8 +32,18 @@ void createConnection(Connection *pConn) {
   pConn->socketfd = sockfd;
   printf("Connected to %s:%d\n", pConn->host, pConn->port);
 }
+
 /**
- * @brief reads all sorts of data from the mail server
+ * @brief reads SMTP response from the mail server (handles multi-line)
+ *
+ * Multi-line SMTP responses use format:
+ *   250-first line    (hyphen = continuation)
+ *   250-second line
+ *   250 last line     (space = final line)
+ *
+ * The 4th character (index 3) indicates continuation:
+ *   '-' = more lines coming
+ *   ' ' = last line
  *
  * @param pConn pointer to connection object
  * @param pData pointer to data buffer
@@ -47,38 +52,66 @@ void createConnection(Connection *pConn) {
 void readStream(Connection *pConn, char **pData, int *nDataLen) {
   *pData = (char *)malloc(sizeof(char) * 1024);
   ssize_t totalBytesRead = 0;
-  ssize_t n;
+  size_t capacity = 1024;
 
-  while ((n = recv(pConn->socketfd, *pData + totalBytesRead, 1, 0)) > 0) {
-    totalBytesRead += n;
-
-    if (totalBytesRead >= 2 && (*pData)[totalBytesRead - 2] == '\r' &&
-        (*pData)[totalBytesRead - 1] == '\n') {
+  while (1) {
+    ssize_t n = recv(pConn->socketfd, *pData + totalBytesRead, 1, 0);
+    if (n <= 0) {
       break;
     }
 
-    if (totalBytesRead % 1024 == 0) {
-      *pData = realloc(*pData, sizeof(char) * (totalBytesRead + 1024));
+    totalBytesRead += n;
+
+    if ((size_t)totalBytesRead >= capacity) {
+      capacity *= 2;
+      *pData = realloc(*pData, capacity);
+    }
+
+    if (totalBytesRead >= 2 && (*pData)[totalBytesRead - 2] == '\r' &&
+        (*pData)[totalBytesRead - 1] == '\n') {
+
+      int lineStart = 0;
+      for (int i = totalBytesRead - 3; i >= 0; i--) {
+        if (i >= 1 && (*pData)[i - 1] == '\r' && (*pData)[i] == '\n') {
+          lineStart = i + 1;
+          break;
+        }
+      }
+
+      if (totalBytesRead - lineStart >= 4) {
+        char separator = (*pData)[lineStart + 3];
+        if (separator == ' ') {
+          break;
+        }
+      }
     }
   }
 
   *nDataLen = totalBytesRead;
 }
 
-/**
- * @brief handles TLS/SSL requests from the server
- *
- * @param pConn pointer to connection object
- */
-void handleTLS(Connection *pConn);
+void writeStream(Connection *pConn, char *data, int nDataLen) {
+  ssize_t totalBytesSent = 0;
+  while (totalBytesSent < nDataLen) {
+    ssize_t n = send(pConn->socketfd, data + totalBytesSent,
+                     nDataLen - totalBytesSent, 0);
+    if (n < 0) {
+      fprintf(stderr, "Failed to send data to %s:%d\n", pConn->host,
+              pConn->port);
+      exit(EXIT_FAILURE);
+    }
+    totalBytesSent += n;
+    printf("Sent %zd bytes to %s:%d\n", n, pConn->host, pConn->port);
+  }
+}
 
-/**
- * @brief closes the connection to the mail server
- *
- * @param pConn pointer to connection object
- */
+void handleTLS(Connection *pConn) {}
+
 void closeConnection(Connection *pConn) {
   close(pConn->socketfd);
   free(pConn->host);
   free(pConn->ip);
+  pConn->socketfd = -1;
+  pConn->host = NULL;
+  pConn->ip = NULL;
 }
