@@ -10,18 +10,22 @@ typedef struct Connection {
   int socketfd;
   SSL *ssl;
   int use_tls;
+  int tag_counter;
 } Connection;
 
 typedef struct Capability {
-  int *code;
   char *name;
-  char *value;
 } Capability;
 
 /**
  * @brief initializes OpenSSL library (call once at program start)
  */
 void initOpenSSL(void);
+
+/**
+ * @brief generates next IMAP command tag (A001, A002, etc.)
+ */
+char* imapNextTag(Connection *pConn);
 
 /**
  * @brief establishes a connection to the mail server

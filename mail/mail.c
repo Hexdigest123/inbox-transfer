@@ -12,6 +12,7 @@
 void createConnection(Connection *pConn) {
   pConn->ssl = NULL;
   pConn->use_tls = 0;
+  pConn->tag_counter = 0;
 
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd < 0) {
@@ -107,6 +108,12 @@ void initOpenSSL(void) {
   SSL_load_error_strings();
   SSL_library_init();
   OpenSSL_add_all_algorithms();
+}
+
+char* imapNextTag(Connection *pConn) {
+  char *tag = (char *)malloc(sizeof(char) * 8);
+  snprintf(tag,8, "A%03d", ++pConn->tag_counter);
+  return tag;
 }
 void handleTLS(Connection *pConn) {
   // Create context

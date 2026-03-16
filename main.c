@@ -38,71 +38,58 @@ int main(int argc, char **argv) {
   sscanf(argv[1], "%255[^:]:%d", conn1.host, &conn1.port);
   sscanf(argv[2], "%255[^:]:%d", conn2.host, &conn2.port);
 
-  // CONNECTION TO SRC SERVER
-  createConnection(&conn1);
-  char *banner = NULL;
-  int bannerLen;
-  readStream(&conn1, &banner, &bannerLen);
-  printf("%s", banner);
+createConnection(&conn1);
+char *banner = NULL;
+int bannerLen;
+readStream(&conn1, &banner, &bannerLen);
+printf("%s", banner);
 
-  writeStream(&conn1, "EHLO example.com\r\n", strlen("EHLO example.com\r\n"));
-  char *capString = NULL;
-  int capStringLength;
-  Capability *capArray = (Capability *)malloc(sizeof(Capability) * 20);
-  int capArrayLength = 0;
-  readStream(&conn1, &capString, &capStringLength);
+if (strncmp(banner, "* OK", 4) != 0) {
+  fprintf(stderr, "Invalid IMAP greeting: %s\n", banner);
+  return 1;
+}
 
-  for (int i = 0; i < capStringLength; i++) {
-    if (capString[i] == '\r' && capString[i + 1] == '\n') {
-      capString[i] = '\0';
+char *tag = imapNextTag(&conn1);
+char cmd[256];
+snprintf(cmd, sizeof(cmd), "%s CAPABILITY\r\n", tag);
+writeStream(&conn1, cmd, strlen(cmd));
+free(tag);
 
-      if (capArrayLength % 20 == 0 && capArrayLength != 0) {
-        Capability *newCapArray = (Capability *)realloc(
-            capArray, sizeof(Capability) * (capArrayLength + 20));
-        if (!newCapArray) {
-          fprintf(stderr, "Memory reallocation failed\n");
-          return 1;
-        }
-        capArray = newCapArray;
-      }
-      capArray[capArrayLength].code = (int *)malloc(sizeof(int));
-      capArray[capArrayLength].name = (char *)malloc(sizeof(char) * 256);
-      capArray[capArrayLength].value = (char *)malloc(sizeof(char) * 256);
-      if (!capArray[capArrayLength].code || !capArray[capArrayLength].name ||
-          !capArray[capArrayLength].value) {
-        fprintf(stderr, "Memory allocation failed\n");
-        return 1;
-      }
+char *capString = NULL;
+int capStringLength;
+readStream(&conn1, &capString, &capStringLength);
+printf("%s", capString);
 
-      sscanf(capString, "%d-%s %s", capArray[capArrayLength].code,
-             capArray[capArrayLength].name, capArray[capArrayLength].value);
-      capArrayLength = capArrayLength + 1;
-
-      capString += i + 2;
-      i = -1;
-    }
+int has_starttls = 0;
+char *line = strtok(capString, "\r\n");
+while (line != NULL) {
+  if (strstr(line, "STARTTLS") != NULL) {
+    has_starttls = 1;
   }
+  line = strtok(NULL, "\r\n");
+}
 
-  for (int i = 0; i < capArrayLength; i++) {
-    printf("%s - %s\n", capArray[i].name, capArray[i].value);
-    if (strcmp(capArray[i].name, "STARTTLS") == 0) {
-      writeStream(&conn1, "STARTTLS\r\n", strlen("STARTTLS\r\n"));
-      char *response = NULL;
-      int responseLen;
-      readStream(&conn1, &response, &responseLen);
-      printf("%s", response);
-      if (strncmp(response, "220", 3) == 0) {
-        handleTLS(&conn1);
-        printf("Connection secured with TLS\n");
-      } else {
-        fprintf(stderr, "Failed to start TLS: %s\n", response);
-        return 1;
-      }
-    }
+if (has_starttls) {
+  tag = imapNextTag(&conn1);
+  snprintf(cmd, sizeof(cmd), "%s STARTTLS\r\n", tag);
+  writeStream(&conn1, cmd, strlen(cmd));
+  free(tag);
+  
+  char *response = NULL;
+  int responseLen;
+  readStream(&conn1, &response, &responseLen);
+  printf("%s", response);
+  
+  if (strstr(response, "OK") != NULL) {
+    handleTLS(&conn1);
+    printf("Connection secured with TLS\n");
+  } else {
+    fprintf(stderr, "Failed to start TLS: %s\n", response);
+    return 1;
   }
+}
 
-  closeConnection(&conn1);
-  // END OF CONNECTION TO SRC SERVER
+closeConnection(&conn1);
 
   return 0;
 }
