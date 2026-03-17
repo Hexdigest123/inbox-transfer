@@ -4,7 +4,9 @@
 *.o
 *.a
 /out
-/main.exe.*
+/main*
+/export
+main
 
 # Environment files
 .env
