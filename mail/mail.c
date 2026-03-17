@@ -39,6 +39,23 @@ void createConnection(Connection *pConn) {
   printf("Connected to %s:%d\n", pConn->host, pConn->port);
 }
 
+int readLiteral(Connection *pConn, char *buffer, int numBytes) {
+  int totalRead = 0;
+  while (totalRead < numBytes) {
+    ssize_t n;
+    if (pConn->use_tls && pConn->ssl) {
+      n = SSL_read(pConn->ssl, buffer + totalRead, numBytes - totalRead);
+    } else {
+      n = recv(pConn->socketfd, buffer + totalRead, numBytes - totalRead, 0);
+    }
+    if (n <= 0) {
+      return -1;
+    }
+    totalRead += n;
+  }
+  return totalRead;
+}
+
 void readStream(Connection *pConn, char **pData, int *nDataLen) {
   *pData = (char *)malloc(sizeof(char) * 1024);
   ssize_t totalBytesRead = 0;

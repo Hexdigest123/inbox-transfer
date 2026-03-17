@@ -39,9 +39,19 @@ void createConnection(Connection *pConn);
  *
  * @param pConn pointer to connection object
  * @param pData pointer to data buffer
- * @param nDataLen pointer to length of the data buffer
+ * @param nDataLen pointer to lengthof the data buffer
  */
 void readStream(Connection *pConn, char **pData, int *nDataLen);
+
+/**
+ * @brief reads exact number of bytes for IMAP literal data
+ *
+ * @param pConn pointer to connection object
+ * @param buffer buffer to read data into
+ * @param numBytes exact number of bytes to read
+ * @return number of bytes read, or -1 on error
+ */
+int readLiteral(Connection *pConn, char *buffer, int numBytes);
 
 /**
  * @brief write data to the server
